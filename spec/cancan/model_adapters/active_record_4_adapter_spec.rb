@@ -86,11 +86,22 @@ if defined? CanCan::ModelAdapters::ActiveRecord4Adapter
           ActiveRecord::Schema.define do
             create_table(:records) do |t|
               t.timestamps :null => false
+              t.references :ledger
               t.string :name
+            end
+
+            create_table(:ledgers) do |t|
+              t.timestamps null: false
+              t.string :title
             end
           end
 
           class Record < ActiveRecord::Base
+            belongs_to :ledger
+          end
+
+          class Ledger < ActiveRecord::Base
+            has_many :records
           end
         end
 
@@ -103,6 +114,44 @@ if defined? CanCan::ModelAdapters::ActiveRecord4Adapter
           accessible = Record.accessible_by(@ability)
           expect(accessible).to include readable
           expect(accessible).not_to include unreadable
+        end
+
+        it "works when used with associations" do
+          @ability.can :read, Ledger, records: { not: { name: "crappy_record" }, name: "better_record" }
+
+          double_records = Ledger.create!(title: "unreadable")
+          double_records.records.create!(name: "crappy_record")
+          double_records.records.create!(name: "better_record")
+
+          only_unreadable = Ledger.create!(title: "unreadable")
+          only_unreadable.records.create!(name: "crappy_record")
+
+          only_readable = Ledger.create!(title: "readable")
+          only_readable.records.create!(name: "better_record")
+
+          accessible = Ledger.accessible_by(@ability)
+          expect(accessible).to_not include(double_records)
+          expect(accessible).to_not include(only_unreadable)
+          expect(accessible).to include(only_readable)
+        end
+
+        it "works when used with associations" do
+          @ability.can :read, Ledger, not: { records: { name: "crappy_record" } }, records: { name: "better_record" }
+
+          double_records = Ledger.create!(title: "unreadable")
+          double_records.records.create!(name: "crappy_record")
+          double_records.records.create!(name: "better_record")
+
+          only_unreadable = Ledger.create!(title: "unreadable")
+          only_unreadable.records.create!(name: "crappy_record")
+
+          only_readable = Ledger.create!(title: "readable")
+          only_readable.records.create!(name: "better_record")
+
+          accessible = Ledger.accessible_by(@ability)
+          expect(accessible).to_not include(double_records)
+          expect(accessible).to_not include(only_unreadable)
+          expect(accessible).to include(only_readable)
         end
       end
     end
